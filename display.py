@@ -1,6 +1,6 @@
 # A generic library that eases the creation of games.
 # Basically a thin thin THIN wrapper over pygame.
-# Feel free to extend this extensible library.
+# Feel free to extend this extensible library with your own extensions.
 
 # May or may not just be an excuse to get a head start on a certain local
 # 7 Day Roguelike contest.
