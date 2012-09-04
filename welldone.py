@@ -118,7 +118,7 @@ cur_level = town
 def init():
 	display.init_window((800, 600), title='Well Done')
 	display.init_sprites('sprites.png', 16, 16)
-	display.init_font('runescapeuf')
+	display.init_font('runescape_uf.ttf')
 	display.init_msg_log(780)
 	# enable key repeat
 	pygame.key.set_repeat(1, 200)

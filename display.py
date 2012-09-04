@@ -1,6 +1,6 @@
 # A generic library that eases the creation of games.
 # Basically a thin thin THIN wrapper over pygame.
-# Feel free to extend this extensible library with your own extensions.
+# Feel free to extend this extensible library.
 
 # May or may not just be an excuse to get a head start on a certain local
 # 7 Day Roguelike contest.
@@ -66,7 +66,7 @@ def init_sprites(filename='', sw=16, sh=16):
 def init_font(name='', size=16):
 	global font
 	# If name is blank, then the pygame default font will be used
-	font = pygame.font.Font(pygame.font.match_font(name), 16)
+	font = pygame.font.Font(name, 16)
 
 def init_msg_log(width):
 	global msg_log
