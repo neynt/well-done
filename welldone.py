@@ -16,6 +16,12 @@ keys_s = [K_j, K_KP2]
 keys_sw = [K_b, K_KP1]
 keys_w = [K_h, K_KP4]
 keys_nw = [K_y, K_KP7]
+keys_action = [K_a, K_KP5]
+
+keys_n_all = keys_n + keys_ne + keys_nw
+keys_e_all = keys_e + keys_se + keys_ne
+keys_s_all = keys_s + keys_se + keys_sw
+keys_w_all = keys_w + keys_nw + keys_sw
 
 class Item:
 	""" Anything that can be on a map. May or may not be
@@ -83,7 +89,7 @@ class Player:
 	mp = 20.0
 	maxmp = 20
 
-	gold = 100
+	gold = 1000000
 
 	entering_text = False
 	entered_text = ""
@@ -160,12 +166,15 @@ def redraw():
 
 	INV_X = 410
 	INV_Y = 80
+	# inventory slot boxes
 	for i in xrange(75):
 		x,y = i%15, i//15
-		display.draw_rect((INV_X+x*19, INV_Y+y*19, 18, 18), (255,255,255))
+		display.draw_rect((INV_X+x*21, INV_Y+y*21,
+			20, 20), (255,255,255))
+	# actual items
 	for i,item in enumerate(Player.inv):
 		x,y = i%15, i//15
-		display.draw_sprite(item.img, (INV_X+1+x*19, INV_Y+1+y*19))
+		display.draw_sprite(item.img, (INV_X+2+x*21, INV_Y+2+y*21))
 
 	display.fill_rect((400,16, 400,16), (192,192,192))
 	display.fill_rect((400,16, 400*(Player.mp/Player.maxmp), 16), (255,255,0))
@@ -189,46 +198,142 @@ def text_input():
 			if event.key == K_RETURN:
 				Player.entering_text = False
 				return Player.entered_text
+			elif event.key == K_ESCAPE:
+				Player.entering_text = False
+				Player.entered_text = ""
+				return ""
+			elif event.key == K_BACKSPACE:
+				Player.entered_text = Player.entered_text[:-1]
+
 			entered_char = event.unicode
 			if entered_char.isalnum() or entered_char.isspace():
 				Player.entered_text += entered_char
-			elif event.key == K_BACKSPACE:
-				Player.entered_text = Player.entered_text[:-1]
 			redraw()
+		else:
+			# Give any events not caught by text_input() to the
+			# standard event handler
+			handle_event_standard(event)
 
-while True:
-	# The good old infinite game loop.
-	event = pygame.event.wait()
+def list_items():
+	items = cur_level.tiles[Player.x][Player.y].items
+	ilist = []
+	for item in items:
+		if cur_level.is_shop and item.holdable: ilist.append('%s (%d g)' % (item.name, item.value))
+		else: ilist.append('%s' % item.name)
+
+	itemlist = ', '.join(ilist)
+	if ilist:
+		display.msg('You see here: %s' % itemlist)
+
+def take_item():
+	items = cur_level.tiles[Player.x][Player.y].items
+
+	for i in range(len(items)-1, -1, -1):
+		if items[i].holdable:
+			item = items[i]
+			if cur_level.is_shop:
+				shop_ask = item.value
+				if Player.gold >= shop_ask:
+					display.msg('Buy the %s for %d gold? (y/N)' % (item.name, shop_ask))
+					response = text_input()
+					if response.lower().startswith('y'):
+						display.msg('You bought it!')
+						Player.gold -= shop_ask
+						Player.inv.append(item)
+						del items[i]
+						return
+				else:
+					# Cannot afford shop item
+					display.msg('You cannot afford the %s! It costs %d gold.' % (item.name, shop_ask))
+					return
+			else:
+				# not a shop; just take the item!
+				display.msg('You take the %s.' % item.name)
+				Player.inv.append(item)
+				del items[i]
+				return
+	else:
+		display.msg('There is nothing here to take.')
+		return
+
+def drop_item():
+	verb = 'Drop'
+	if cur_level.is_shop:
+		verb = 'Sell'
+
+	itemlist = []
+	for i,item in enumerate(Player.inv):
+		if cur_level.is_shop: itemlist.append('%d: %s (%d g)' % (i, item.name, item.value))
+		else: itemlist.append('%d: %s' % (i, item.name))
+
+	display.msg(verb + ' which item? ' + ', '.join(itemlist))
+	response = text_input()
+
+	try:
+		rid = int(response)
+		item = None
+		if 0 <= rid < len(Player.inv):
+			item = Player.inv[rid]
+			if cur_level.is_shop:
+				display.msg('Sold for %d gold.' % item.value)
+				Player.gold += item.value
+			Player.inv.pop(rid)
+			cur_level.tiles[Player.x][Player.y].items.append(item)
+		else:
+			raise ValueError
+	except ValueError:
+		display.msg('Invalid item.')
+		return
+
+def cycle_items():
+	items = cur_level.tiles[Player.x][Player.y].items
+	items.append(items.pop(0))
+	list_items()
+
+def handle_event_standard(event):
+	global cur_level
 	if event.type == KEYDOWN:
+
+		# Movement keys
 		old_x = Player.x
 		old_y = Player.y
-		if event.key in keys_n + keys_ne + keys_nw:
+		if event.key in keys_n_all:
 			Player.y -= 1
-		if event.key in keys_e + keys_se + keys_ne:
+		if event.key in keys_e_all:
 			Player.x += 1
-		if event.key in keys_s + keys_se + keys_sw:
+		if event.key in keys_s_all:
 			Player.y += 1
-		if event.key in keys_w + keys_nw + keys_sw:
+		if event.key in keys_w_all:
 			Player.x -= 1
+		# if the player has moved...
 		if Player.x != old_x or Player.y != old_y:
 			if not cur_level.passable(Player.x, Player.y):
 				Player.x = old_x
 				Player.y = old_y
 			else:
-				itemlist = ', '.join(item.name for item in cur_level.tiles[Player.x][Player.y].items)
-				if itemlist:
-					display.msg('You see here: %s' % itemlist)
+				list_items()
+			redraw()
+			return
 
+		# Take/buy item
 		if event.key == K_COMMA:
-			items = cur_level.tiles[Player.x][Player.y].items
-			for i in range(len(items)-1, -1, -1):
-				if items[i].holdable:
-					Player.inv.append(items[i])
-					display.msg('You take the %s.' % items[i].name)
-					del items[i]
-					break
-			else:
-				display.msg('There is nothing here to take.')
+			take_item()
+			redraw()
+			return
+
+		# Drop/sell item
+		if event.key == K_d:
+			drop_item()
+			redraw()
+			return
+
+		# Cycle items on ground
+		if event.key == K_c:
+			cycle_items()
+			redraw()
+			return
+
+		# Apply object (usually to enter a portal)
 		elif event.key == K_a:
 			if (Player.x, Player.y) in cur_level.portals:
 				portal = cur_level.portals[(Player.x, Player.y)]
@@ -237,10 +342,22 @@ while True:
 				Player.y = portal.dest_y
 				Player.mp -= 1
 				display.msg('You enter %s.' % portal.name)
+				redraw()
+			return
+
+		# Enter (to manually enter commands)
 		elif event.key == K_RETURN:
 			text = text_input()
 			display.msg('What is a %s?' % text)
-		redraw()
+			redraw()
+			return
+
 	elif event.type == QUIT:
 		pygame.quit()
 		sys.exit()
+		return
+
+while True:
+	# The good old infinite game loop.
+	event = pygame.event.wait()
+	handle_event_standard(event)

@@ -83,7 +83,7 @@ def draw_text(text, dest, color=(255,255,255)):
 	screen.blit(render, dest)
 
 def draw_rect(rect, color):
-	pygame.draw.rect(screen, color, rect)
+	pygame.draw.rect(screen, color, rect, 1)
 
 def fill_rect(rect, color):
 	screen.fill(color, rect)
@@ -96,4 +96,3 @@ def clear(color = (0,0,0)):
 
 def update():
 	pygame.display.update()
-
