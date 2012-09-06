@@ -16,6 +16,7 @@ pygame.font.init()
 # modular globals
 screen = None
 sprites = None
+sprites_grey = None
 sprite_width = 16
 sprite_height = 16
 font = None
@@ -53,11 +54,17 @@ def init_window(size=(600,400), title='unnamed game'):
 	pygame.display.set_caption(title)
 
 def init_sprites(filename='', sw=16, sh=16):
-	global sprites, sprite_width, sprite_height
+	global sprites, sprites_grey, sprite_width, sprite_height
 	sprite_width = sw
 	sprite_height = sh
 	if os.path.exists(filename):
 		sprites = pygame.image.load(filename).convert_alpha()
+		sprites_grey = sprites.copy()
+		for x,y in ((x,y) for x in xrange(sprites.get_width()) for y in xrange(sprites.get_height())):
+			c = sprites_grey.get_at((x,y))
+			avg = (c.r + c.g + c.b) // 7
+			c.r = c.g = c.b = avg
+			sprites_grey.set_at((x,y), c)
 	else:
 		# If file doesn't exist, troll user with a full red spritesheet
 		sprites = pygame.Surface((sprite_width*10, sprite_height*20)).convert_alpha()
@@ -73,10 +80,11 @@ def init_msg_log(width):
 	msg_log = MessageLog(width)
 
 # callable functions
-def draw_sprite(sid, dest):
+def draw_sprite(sid, dest, sheet=None):
+	if sheet == None: sheet = sprites
 	x = sid%10 * sprite_width
 	y = sid//10 * sprite_height
-	screen.blit(sprites, dest, area=(x, y, sprite_width, sprite_height))
+	screen.blit(sheet, dest, area=(x, y, sprite_width, sprite_height))
 
 def draw_text(text, dest, color=(255,255,255)):
 	render = font.render(text, False, color)

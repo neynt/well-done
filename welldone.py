@@ -1,4 +1,5 @@
 import sys
+import random
 import pygame
 from pygame.locals import *
 # Our very own display module that manages all graphical things.
@@ -23,6 +24,50 @@ keys_e_all = keys_e + keys_se + keys_ne
 keys_s_all = keys_s + keys_se + keys_sw
 keys_w_all = keys_w + keys_nw + keys_sw
 
+# python please add this to standard library
+def range2d(w, h):
+	return ((x,y) for x in xrange(w) for y in xrange(h))
+
+# and this too
+def box2d(x, y, w, h):
+	return ((a+x,b+y) for (a,b) in range2d(w,h))
+
+# seriously i'm using python to avoid this kind of
+# trivial stuff
+def line2d(x1, y1, x2, y2):
+	points = []
+	issteep = abs(y2-y1) > abs(x2-x1)
+	if issteep:
+		x1, y1 = y1, x1
+		x2, y2 = y2, x2
+	rev = False
+	if x1 > x2:
+		x1, x2 = x2, x1
+		y1, y2 = y2, y1
+		rev = True
+	deltax = x2 - x1
+	deltay = abs(y2-y1)
+	error = int(deltax / 2)
+	y = y1
+	ystep = None
+	if y1 < y2:
+		ystep = 1
+	else:
+		ystep = -1
+	for x in range(x1, x2 + 1):
+		if issteep:
+			points.append((y,x))
+		else:
+			points.append((x,y))
+		error -= deltay
+		if error < 0:
+			y += ystep
+			error += deltax
+	# Reverse list if coordinates were reversed
+	if rev:
+		points.reverse()
+	return points
+
 class Item:
 	""" Anything that can be on a map. May or may not be
 	able to be picked up by the player. """
@@ -34,9 +79,21 @@ class Item:
 
 class Tile:
 	""" Represents a single tile in a Level. """
-	def __init__(self, img, passable=True, items=[]):
+	def __init__(self, img, blocking=False, transparent=True, items=[]):
+		# The image (from sprites.py) that will be drawn for the tile's terrain
 		self.img = img
-		self.passable = passable
+
+		# Can things pass through this tile? Maybe have some ghosts
+		# that ignore this?
+		self.blocking = blocking
+
+		# Can light pass through this tile? If not, it will block player's
+		# vision
+		self.transparent = True
+
+		# Seen/memorized by the player
+		self.seen = False
+		self.memorized = False
 
 		# Make a new copy of the items list for each tile
 		# (otherwise, every tile will have the same items list)
@@ -56,7 +113,6 @@ class Level:
 		self.width = w
 		self.height = h
 
-		# In a shop, dropping an item sells it and picking one up buys it
 		self.is_shop = is_shop
 
 		# 2D list of tiles
@@ -69,17 +125,58 @@ class Level:
 		for t in (self.tiles[x][y] for x in xrange(self.width) for y in xrange(self.height)):
 			yield t
 	
+	def all_empty_tiles(self):
+		for t in all_tiles():
+			if not t.blocking:
+				yield t
+	
+	def sight(self, x1, y1, x2, y2):
+		for x,y in line2d(x1, y1, x2, y2)[:-1]:
+			if self.tiles[x][y].blocking:
+				return False
+		return True
+	
 	def passable(self, x, y):
 		if x < 0 or x >= self.width or y < 0 or y >= self.height:
 			return False
-		return self.tiles[x][y].passable;
-
+		return not self.tiles[x][y].blocking;
+	
 	def clear(self, img):
 		for t in self.all_tiles():
 			t.img = img
 	
 	def generate_dungeon(self):
-		self.clear(spr.MUD_FLOOR)
+		w,h = self.width, self.height
+		new_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
+		for x,y in range2d(w, h):
+			if random.random() < 0.43:
+				new_map[x][y] = 1
+
+		for i in xrange(2):
+			print(new_map)
+			temp_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
+			for x,y in range2d(w, h):
+				wall_count = 0
+				for i,j in box2d(x-1, y-1, 3, 3):
+					if 0 <= i < w and 0 <= j < h:
+						wall_count += new_map[i][j]
+					else:
+						# sides = instawall
+						wall_count += 3
+
+				if wall_count >= 5:
+					temp_map[x][y] = 1
+
+			new_map = temp_map
+
+		for x,y in range2d(w, h):
+			tile = self.tiles[x][y]
+			if new_map[x][y] == 1:
+				tile.img = spr.ROCK
+				tile.blocking = True
+			else:
+				tile.img = spr.MUD_FLOOR
+				tile.blocking = False
 
 class Player:
 	x = 0
@@ -108,16 +205,16 @@ town.tiles[5][5].items.append(Item(spr.SHOP, name="humble shop", holdable=False)
 town.tiles[12][12].items.append(Item(spr.WELL, name="well of doom", holdable=False))
 
 shop = Level(16, 16, is_shop=True)
-shop.clear(spr.ROCK)
+shop.clear(spr.WOOD_FLOOR)
 shop.tiles[0][0].items.append(Item(spr.SHOP, holdable=False))
 
-well = [Level(24, 24) for i in xrange(20)]
-well[0].generate_dungeon()
+well = [Level(13+i*2, 13+i*2) for i in xrange(20)]
+well[19].generate_dungeon()
 
 shop.portals[(0,0)] = Portal(town, 5, 5, "the town")
-town.portals[(12, 12)] = Portal(well[0], 5, 5, "the well of doom")
+town.portals[(12, 12)] = Portal(well[19], 5, 5, "the well of doom")
 town.portals[(5, 5)] = Portal(shop, 0, 0, "the humble shop")
-well[0].portals[(5, 5)] = Portal(town, 12, 12, "the town")
+well[19].portals[(5, 5)] = Portal(town, 12, 12, "the town")
 
 cur_level = town
 
@@ -133,16 +230,20 @@ def redraw():
 	display.clear((64,64,64))
 	# Draw the map
 	display.fill_rect((0,0, 400,400), (0,0,0))
-	for x,y in ((x,y) for x in xrange(-12, 13) for y in xrange(-12, 13)):
-		# for each tile in the player's vision:
+	# for each tile in the player's map range:
+	for x,y in box2d(-12, -12, 25, 25):
 		ax, ay = x+Player.x, y+Player.y
 		if 0 <= ax < cur_level.width and 0 <= ay < cur_level.height:
 			cur_tile = cur_level.tiles[ax][ay]
-			# draw the terrain
-			display.draw_sprite(cur_tile.img, ((x+12)*16, (y+12)*16))
-			# draw each item, starting with the ones on the bottom of the pile
-			for i in cur_tile.items:
-				display.draw_sprite(i.img, ((x+12)*16, (y+12)*16))
+			if cur_level.sight(Player.x, Player.y, ax, ay):
+				cur_tile.memorized = True
+				# draw the terrain
+				display.draw_sprite(cur_tile.img, ((x+12)*16, (y+12)*16))
+				# draw each item, starting with the ones on the bottom of the pile
+				for i in cur_tile.items:
+					display.draw_sprite(i.img, ((x+12)*16, (y+12)*16))
+			elif cur_tile.memorized:
+				display.draw_sprite(cur_tile.img, ((x+12)*16, (y+12)*16), sheet=display.sprites_grey)
 
 	# Draw player's sprite (always at center of map)
 	display.draw_sprite(spr.PLAYER, (16*12, 16*12))
@@ -241,7 +342,7 @@ def take_item():
 						Player.gold -= shop_ask
 						Player.inv.append(item)
 						del items[i]
-						return
+					return
 				else:
 					# Cannot afford shop item
 					display.msg('You cannot afford the %s! It costs %d gold.' % (item.name, shop_ask))
@@ -308,10 +409,16 @@ def handle_event_standard(event):
 		# if the player has moved...
 		if Player.x != old_x or Player.y != old_y:
 			if not cur_level.passable(Player.x, Player.y):
+				# move player back to original position
 				Player.x = old_x
 				Player.y = old_y
-			else:
-				list_items()
+				return
+
+			# list items on floor
+			list_items()
+			
+			# recalculate vision
+			
 			redraw()
 			return
 
@@ -349,6 +456,12 @@ def handle_event_standard(event):
 		elif event.key == K_RETURN:
 			text = text_input()
 			display.msg('What is a %s?' % text)
+			redraw()
+			return
+		
+		elif event.key == K_0:
+			well[19].generate_dungeon()
+			display.msg('You feel the dungeons shifting beneath your feet.')
 			redraw()
 			return
 
