@@ -6,6 +6,8 @@ from pygame.locals import *
 import display
 # Game modules
 import sprites as spr
+from level import Item, Tile, Portal, Creature, Level
+from my_geom import range2d, box2d, line2d
 from namegenerator import generate_name
 
 # Game config
@@ -24,199 +26,13 @@ keys_e_all = keys_e + keys_se + keys_ne
 keys_s_all = keys_s + keys_se + keys_sw
 keys_w_all = keys_w + keys_nw + keys_sw
 
-# python please add this to standard library
-def range2d(w, h):
-	return ((x,y) for x in xrange(w) for y in xrange(h))
-
-# and this too
-def box2d(x, y, w, h):
-	return ((a+x,b+y) for (a,b) in range2d(w,h))
-
-# seriously i'm using python to avoid this kind of
-# trivial stuff
-def line2d(x1, y1, x2, y2):
-	points = []
-	issteep = abs(y2-y1) > abs(x2-x1)
-	if issteep:
-		x1, y1 = y1, x1
-		x2, y2 = y2, x2
-	rev = False
-	if x1 > x2:
-		x1, x2 = x2, x1
-		y1, y2 = y2, y1
-		rev = True
-	deltax = x2 - x1
-	deltay = abs(y2-y1)
-	error = int(deltax / 2)
-	y = y1
-	ystep = None
-	if y1 < y2:
-		ystep = 1
-	else:
-		ystep = -1
-	for x in range(x1, x2 + 1):
-		if issteep:
-			points.append((y,x))
-		else:
-			points.append((x,y))
-		error -= deltay
-		if error < 0:
-			y += ystep
-			error += deltax
-	# Reverse list if coordinates were reversed
-	if rev:
-		points.reverse()
-	return points
-
-class Item:
-	""" Anything that can be on a map. May or may not be
-	able to be picked up by the player. """
-	def __init__(self, img, name='generic item', holdable=True, value=0):
-		self.img = img
-		self.name = name
-		self.holdable = holdable
-		self.value = value
-
-class Tile:
-	""" Represents a single tile in a Level. """
-	def __init__(self, img, blocking=False, transparent=True, items=[]):
-		# The image (from sprites.py) that will be drawn for the tile's terrain
-		self.img = img
-
-		# Can things pass through this tile? Maybe have some ghosts
-		# that ignore this?
-		self.blocking = blocking
-
-		# Can light pass through this tile? If not, it will block player's
-		# vision
-		self.transparent = True
-
-		# Seen/memorized by the player
-		self.seen = False
-		self.memorized = False
-
-		# Make a new copy of the items list for each tile
-		# (otherwise, every tile will have the same items list)
-		self.items = list(items)
-
-class Portal:
-	""" Takes a user from one Level to another. """
-	def __init__(self, dest_level, dest_x, dest_y, name="a generic portal"):
-		self.dest_level = dest_level
-		self.dest_x = dest_x
-		self.dest_y = dest_y
-		self.name = name
-
-class Level:
-	""" Represents a floor of a dungeon or other map. """
-	def __init__(self, w, h, is_shop=False):
-		self.width = w
-		self.height = h
-
-		self.is_shop = is_shop
-
-		# 2D list of tiles
-		self.tiles = [[Tile(spr.ROCK) for i in xrange(h)] for i in xrange(w)]
-
-		# list of portals
-		self.portals = {}
-
-	def all_tiles(self):
-		for t in (self.tiles[x][y] for x in xrange(self.width) for y in xrange(self.height)):
-			yield t
-	
-	def all_empty_tiles(self):
-		for t in all_tiles():
-			if not t.blocking:
-				yield t
-	
-	def sight(self, x1, y1, x2, y2):
-		for x,y in line2d(x1, y1, x2, y2)[:-1]:
-			if self.tiles[x][y].blocking:
-				return False
-		return True
-	
-	def passable(self, x, y):
-		if x < 0 or x >= self.width or y < 0 or y >= self.height:
-			return False
-		return not self.tiles[x][y].blocking;
-	
-	def clear(self, img):
-		for t in self.all_tiles():
-			t.img = img
-	
-	def generate_dungeon(self):
-		w,h = self.width, self.height
-		new_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
-		for x,y in range2d(w, h):
-			if random.random() < 0.43:
-				new_map[x][y] = 1
-
-		for i in xrange(2):
-			print(new_map)
-			temp_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
-			for x,y in range2d(w, h):
-				wall_count = 0
-				for i,j in box2d(x-1, y-1, 3, 3):
-					if 0 <= i < w and 0 <= j < h:
-						wall_count += new_map[i][j]
-					else:
-						# sides = instawall
-						wall_count += 3
-
-				if wall_count >= 5:
-					temp_map[x][y] = 1
-
-			new_map = temp_map
-
-		for x,y in range2d(w, h):
-			tile = self.tiles[x][y]
-			if new_map[x][y] == 1:
-				tile.img = spr.ROCK
-				tile.blocking = True
-			else:
-				tile.img = spr.MUD_FLOOR
-				tile.blocking = False
-
-class Player:
-	x = 0
-	y = 0
-	hp = 60.0
-	maxhp = 100
+class Player(Creature):
 	mp = 20.0
 	maxmp = 20
-
-	gold = 1000000
-
+	gold = 100
 	entering_text = False
 	entered_text = ""
-
 	inv = []
-
-# Game variables
-# Maps
-town = Level(24, 24)
-town.clear(spr.GRASS)
-town.tiles[6][8].items.append(Item(spr.MUD_FLOOR, name="slab of dried mud", value=9001))
-town.tiles[6][8].items.append(Item(spr.GOLD_NUGGET, name="gold nugget", value=9001))
-for i in xrange(10):
-	town.tiles[3][3+i].items.append(Item(spr.GOLD_NUGGET, name="gold nugget", value=9001))
-town.tiles[5][5].items.append(Item(spr.SHOP, name="humble shop", holdable=False))
-town.tiles[12][12].items.append(Item(spr.WELL, name="well of doom", holdable=False))
-
-shop = Level(16, 16, is_shop=True)
-shop.clear(spr.WOOD_FLOOR)
-shop.tiles[0][0].items.append(Item(spr.SHOP, holdable=False))
-
-well = [Level(13+i*2, 13+i*2) for i in xrange(20)]
-well[19].generate_dungeon()
-
-shop.portals[(0,0)] = Portal(town, 5, 5, "the town")
-town.portals[(12, 12)] = Portal(well[19], 5, 5, "the well of doom")
-town.portals[(5, 5)] = Portal(shop, 0, 0, "the humble shop")
-well[19].portals[(5, 5)] = Portal(town, 12, 12, "the town")
-
-cur_level = town
 
 def init():
 	display.init_window((800, 600), title='Well Done')
@@ -230,12 +46,12 @@ def redraw():
 	display.clear((64,64,64))
 	# Draw the map
 	display.fill_rect((0,0, 400,400), (0,0,0))
-	# for each tile in the player's map range:
 	for x,y in box2d(-12, -12, 25, 25):
+		# for each tile in the player's map range:
 		ax, ay = x+Player.x, y+Player.y
-		if 0 <= ax < cur_level.width and 0 <= ay < cur_level.height:
-			cur_tile = cur_level.tiles[ax][ay]
-			if cur_level.sight(Player.x, Player.y, ax, ay):
+		if 0 <= ax < Player.cur_level.width and 0 <= ay < Player.cur_level.height:
+			cur_tile = Player.cur_level.tiles[ax][ay]
+			if Player.cur_level.sight(Player.x, Player.y, ax, ay):
 				cur_tile.memorized = True
 				# draw the terrain
 				display.draw_sprite(cur_tile.img, ((x+12)*16, (y+12)*16))
@@ -244,6 +60,13 @@ def redraw():
 					display.draw_sprite(i.img, ((x+12)*16, (y+12)*16))
 			elif cur_tile.memorized:
 				display.draw_sprite(cur_tile.img, ((x+12)*16, (y+12)*16), sheet=display.sprites_grey)
+
+	# Draw creatures
+	for c in Player.cur_level.creatures:
+		sx, sy = c.x-Player.x+12, c.y-Player.y+12
+		if 0 <= sx < 25 and 0 <= sy < 25:
+			print(c)
+			display.draw_sprite(c.img, (sx*16, sy*16))
 
 	# Draw player's sprite (always at center of map)
 	display.draw_sprite(spr.PLAYER, (16*12, 16*12))
@@ -265,16 +88,23 @@ def redraw():
 	# Player's wealth and inventory
 	display.draw_text('Gold: %d' % (Player.gold), (405, 40), (255,255,0))
 
-	INV_X = 410
-	INV_Y = 80
+	INV_X = 420
+	INV_Y = 190
+	INV_W = 10
+	INV_H = 10
 	# inventory slot boxes
-	for i in xrange(75):
-		x,y = i%15, i//15
-		display.draw_rect((INV_X+x*21, INV_Y+y*21,
-			20, 20), (255,255,255))
+	for i in xrange(INV_W*INV_H):
+		x,y = i%INV_W, i//INV_W
+		display.draw_rect((INV_X+x*21, INV_Y+y*21, 20, 20), (255,255,255))
+	# inventory axis labels (for EZ-dropping/selling)
+	for i in xrange(INV_W):
+		display.draw_text('%d' % i, (INV_X+i*21+6, INV_Y-15))
+	for i in xrange(INV_H):
+		display.draw_text('%d' % i, (INV_X-9, INV_Y+i*21+3))
+
 	# actual items
 	for i,item in enumerate(Player.inv):
-		x,y = i%15, i//15
+		x,y = i%INV_W, i//INV_W
 		display.draw_sprite(item.img, (INV_X+2+x*21, INV_Y+2+y*21))
 
 	display.fill_rect((400,16, 400,16), (192,192,192))
@@ -282,12 +112,6 @@ def redraw():
 	display.draw_text('ENERGY: %d/%d' % (Player.mp, Player.maxmp), (405, 17), (0,0,0))
 	display.update()
 
-init()
-
-display.msg("Well Done")
-display.msg("You have arrived in the village of %s, seeking the treasures that await you in its well." % generate_name().capitalize())
-
-redraw()
 
 def text_input():
 	Player.entering_text = True
@@ -316,10 +140,10 @@ def text_input():
 			handle_event_standard(event)
 
 def list_items():
-	items = cur_level.tiles[Player.x][Player.y].items
+	items = Player.cur_level.tiles[Player.x][Player.y].items
 	ilist = []
 	for item in items:
-		if cur_level.is_shop and item.holdable: ilist.append('%s (%d g)' % (item.name, item.value))
+		if Player.cur_level.is_shop and item.holdable: ilist.append('%s (%d g)' % (item.name, item.value))
 		else: ilist.append('%s' % item.name)
 
 	itemlist = ', '.join(ilist)
@@ -327,12 +151,12 @@ def list_items():
 		display.msg('You see here: %s' % itemlist)
 
 def take_item():
-	items = cur_level.tiles[Player.x][Player.y].items
+	items = Player.cur_level.tiles[Player.x][Player.y].items
 
 	for i in range(len(items)-1, -1, -1):
 		if items[i].holdable:
 			item = items[i]
-			if cur_level.is_shop:
+			if Player.cur_level.is_shop:
 				shop_ask = item.value
 				if Player.gold >= shop_ask:
 					display.msg('Buy the %s for %d gold? (y/N)' % (item.name, shop_ask))
@@ -359,12 +183,12 @@ def take_item():
 
 def drop_item():
 	verb = 'Drop'
-	if cur_level.is_shop:
+	if Player.cur_level.is_shop:
 		verb = 'Sell'
 
 	itemlist = []
 	for i,item in enumerate(Player.inv):
-		if cur_level.is_shop: itemlist.append('%d: %s (%d g)' % (i, item.name, item.value))
+		if Player.cur_level.is_shop: itemlist.append('%d: %s (%d g)' % (i, item.name, item.value))
 		else: itemlist.append('%d: %s' % (i, item.name))
 
 	display.msg(verb + ' which item? ' + ', '.join(itemlist))
@@ -375,11 +199,11 @@ def drop_item():
 		item = None
 		if 0 <= rid < len(Player.inv):
 			item = Player.inv[rid]
-			if cur_level.is_shop:
+			if Player.cur_level.is_shop:
 				display.msg('Sold for %d gold.' % item.value)
 				Player.gold += item.value
 			Player.inv.pop(rid)
-			cur_level.tiles[Player.x][Player.y].items.append(item)
+			Player.cur_level.tiles[Player.x][Player.y].items.append(item)
 		else:
 			raise ValueError
 	except ValueError:
@@ -387,12 +211,11 @@ def drop_item():
 		return
 
 def cycle_items():
-	items = cur_level.tiles[Player.x][Player.y].items
+	items = Player.cur_level.tiles[Player.x][Player.y].items
 	items.append(items.pop(0))
 	list_items()
 
 def handle_event_standard(event):
-	global cur_level
 	if event.type == KEYDOWN:
 
 		# Movement keys
@@ -408,7 +231,7 @@ def handle_event_standard(event):
 			Player.x -= 1
 		# if the player has moved...
 		if Player.x != old_x or Player.y != old_y:
-			if not cur_level.passable(Player.x, Player.y):
+			if not Player.cur_level.passable(Player.x, Player.y):
 				# move player back to original position
 				Player.x = old_x
 				Player.y = old_y
@@ -441,10 +264,10 @@ def handle_event_standard(event):
 			return
 
 		# Apply object (usually to enter a portal)
-		elif event.key == K_a:
-			if (Player.x, Player.y) in cur_level.portals:
-				portal = cur_level.portals[(Player.x, Player.y)]
-				cur_level = portal.dest_level
+		elif event.key in keys_action:
+			if (Player.x, Player.y) in Player.cur_level.portals:
+				portal = Player.cur_level.portals[(Player.x, Player.y)]
+				Player.cur_level = portal.dest_level
 				Player.x = portal.dest_x
 				Player.y = portal.dest_y
 				Player.mp -= 1
@@ -469,6 +292,58 @@ def handle_event_standard(event):
 		pygame.quit()
 		sys.exit()
 		return
+
+init()
+
+# Game variables
+# Maps
+town = Level(24, 24)
+town.clear(spr.GRASS)
+town.tiles[6][8].items.append(Item(spr.MUD_FLOOR, name="slab of dried mud", value=9001))
+town.tiles[6][8].items.append(Item(spr.GOLD_NUGGET, name="gold nugget", value=9001))
+for i in xrange(10):
+	town.tiles[3][3+i].items.append(Item(spr.GOLD_NUGGET, name="gold nugget", value=9001))
+town.tiles[5][5].items.append(Item(spr.SHOP, name="humble shop", holdable=False))
+town.tiles[12][12].items.append(Item(spr.WELL, name="well of doom", holdable=False))
+town.creatures.append(Creature(town, 22, 22, 10, 10))
+
+shop = Level(16, 16, is_shop=True)
+shop.generate_shop()
+shop.add_item((1,1), Item(spr.DOOR, holdable=False))
+
+Player = Player(town, 10, 10, 60, 100)
+
+well = [Level(13+i*2, 13+i*2) for i in xrange(20)]
+prev_up = None
+prev_down = None
+for i in xrange(20):
+	well[i].generate_dungeon()
+	mr = well[i].get_main_region()
+	treasures = random.sample(mr, 5)
+	for loc in treasures:
+		well[i].add_item(loc, Item(spr.GOLD_NUGGET, name="gold nugget", value=100))
+
+	if i == 19:
+		pass
+	else:
+		to_up, to_down = random.sample(mr, 2)
+		well[i].add_item(to_up, Item(spr.ROPE_UP, holdable=False))
+		well[i].add_item(to_down, Item(spr.WELL, holdable=False))
+		if i == 0:
+			well[i].portals[to_up] = Portal(town, 12, 12)
+			town.portals[(12,12)] = Portal(well[0], *to_up)
+		else:
+			well[i-1].portals[prev_down] = Portal(well[i], *to_up)
+			well[i].portals[to_up] = Portal(well[i-1], *prev_down)
+		prev_up = to_up
+		prev_down = to_down
+
+shop.portals[(1,1)] = Portal(town, 5, 5, "the town")
+town.portals[(5, 5)] = Portal(shop, 0, 0, "the humble shop")
+display.msg("Well Done")
+display.msg("You have arrived in the village of %s, seeking the treasures that await you in its well." % generate_name().capitalize())
+
+redraw()
 
 while True:
 	# The good old infinite game loop.
