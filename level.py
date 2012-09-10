@@ -7,7 +7,7 @@ from objects import Tile
 
 class Level:
 	""" Represents a floor of a dungeon or other map. """
-	def __init__(self, w, h, is_shop=False):
+	def __init__(self, w, h, is_shop=False, name="generic level"):
 		self.width = w
 		self.height = h
 
@@ -16,11 +16,16 @@ class Level:
 		# 2D list of tiles
 		self.tiles = [[Tile(spr.ROCK) for i in xrange(h)] for i in xrange(w)]
 
+		# has the player visited us?
+		self.visited = False
+
 		# dict of portals
 		self.portals = {}
 
 		# list of creatures
 		self.creatures = []
+
+		self.name = name
 
 		self.illuminated = False
 
@@ -99,7 +104,7 @@ class Level:
 		
 		# Also illuminate if a luminous item is held by a creature
 		for c in self.creatures:
-			for i in c.inv:
+			for i in c.inv + c.equipment:
 				if i.luminosity > 0:
 					for a,b in self.field_of_view(c.x, c.y, i.luminosity):
 						self.tiles[a][b].lit = True
@@ -154,20 +159,6 @@ class Level:
 	def clear(self, img):
 		for t in self.all_tiles():
 			t.img = img
-	
-	# Level generation things.
-	def generate_shop(self):
-		w,h = self.width, self.height
-		for x,y in range2d(w, h):
-			t = self.tiles[x][y]
-			if x == 0 or y == 0 or x == w-1 or y == h-1:
-				t.img = spr.WOOD_WALL
-				t.blocking = True
-				t.transparent = False
-			else:
-				t.img = spr.WOOD_FLOOR
-				t.blocking = False
-				t.transparent = True
 
 	def generate_town(self):
 		w,h = self.width, self.height
@@ -197,39 +188,3 @@ class Level:
 			t.transparent = False
 		town_district(self, 1, 1, w-2, h-2)
 
-	def generate_dungeon(self):
-		w,h = self.width, self.height
-		new_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
-		for x,y in range2d(w, h):
-			if random.random() < 0.43:
-				new_map[x][y] = 1
-
-		for i in xrange(2):
-			temp_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
-			for x,y in range2d(w, h):
-				wall_count = 0
-				for i,j in box2d(x-1, y-1, 3, 3):
-					if 0 <= i < w and 0 <= j < h:
-						wall_count += new_map[i][j]
-					else:
-						# sides = instawall
-						wall_count += 3
-
-				if wall_count >= 5:
-					temp_map[x][y] = 1
-
-			new_map = temp_map
-
-		for x,y in range2d(w, h):
-			tile = self.tiles[x][y]
-			if new_map[x][y] == 1:
-				tile.img = spr.ROCK
-				tile.blocking = True
-				tile.transparent = False
-			else:
-				tile.img = spr.MUD_FLOOR
-				tile.blocking = False
-				tile.transparent = True
-
-		for region in sorted(self.get_regions(), key=len, reverse=True):
-			print("Region of size %d" % len(region))

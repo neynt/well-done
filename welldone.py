@@ -7,7 +7,8 @@ import display
 # Game modules
 from my_geom import range2d, box2d, line2d, square2d
 import sprites as spr
-from creature import Creature, Player
+from creature import Creature
+from player import Player
 from world import town, shop, well
 from objects import Item, Tile, Portal
 from namegenerator import generate_name
@@ -39,39 +40,10 @@ def init():
 	# Gold cheat:
 	#for i in xrange(10):
 	#	town.tiles[3][3].items.append(Item(spr.GOLD_NUGGET, name="gold nugget", value=9001))
-	town.add_item((12,12), Item(spr.WELL, name="well of doom", holdable=False))
+	town.creatures.append(Player)
 
 	prev_up = None
 	prev_down = None
-	for i in xrange(20):
-		well[i].generate_dungeon()
-		mr = well[i].get_main_region()
-
-		treasures = random.sample(mr, 5)
-		for loc in treasures:
-			well[i].add_item(loc, Item(spr.GOLD_NUGGET, name="gold nugget", value=100))
-
-		mobs = random.sample(mr, 5)
-		for mob in mobs:
-			well[i].creatures.append(Creature(well[i], *mob, hp=10, maxhp=10, name="malicious slime"))
-
-		if i == 19:
-			pass
-		else:
-			to_up, to_down = random.sample(mr, 2)
-			well[i].add_item(to_up, Item(spr.ROPE_UP, holdable=False))
-			well[i].add_item(to_down, Item(spr.WELL, holdable=False))
-			if i == 0:
-				well[i].portals[to_up] = Portal(town, 12, 12)
-				town.portals[(12,12)] = Portal(well[0], *to_up)
-			else:
-				well[i-1].portals[prev_down] = Portal(well[i], *to_up)
-				well[i].portals[to_up] = Portal(well[i-1], *prev_down)
-			prev_up = to_up
-			prev_down = to_down
-
-	town.portals[(5, 5)] = Portal(shop[0], 1, 1, "the humble shop")
-	town.creatures.append(Player)
 
 	display.msg("Well Done")
 	display.msg("You have arrived in the village of %s, seeking the treasures that await you in its well." % generate_name().capitalize())
@@ -158,15 +130,35 @@ def redraw():
 		x,y = i%INV_W, i//INV_W
 		display.draw_sprite(item.img, (INV_X+2+x*21, INV_Y+2+y*21))
 
-	# Equipment
-	display.draw_text('Equipment', (660, 200))
-	for i,item in enumerate(Player.equipment):
-		display.draw_text('%d: %s' % (i,item.name), (660, 216+i*16))
+	# Equipment (garb)
+	EQ_X = 640
+	EQ_Y = 200
+	display.draw_text('Your equipment:', (EQ_X, EQ_Y))
+	if Player.equipment:
+		for i,item in enumerate(Player.equipment):
+			EQ_Y += 16
+			if item.equip_slot:
+				display.draw_text('%d: %s (%s)' % (i,item.name,item.equip_slot), (EQ_X, EQ_Y))
+			else:
+				display.draw_text('%d: %s' % (i,item.name), (EQ_X, EQ_Y))
+	else:
+		EQ_Y += 16
+		display.draw_text('None!', (EQ_X, EQ_Y))
+
+	EQ_Y += 16
+	# also write empty slots under garb
+	for slot in Player.equip_slots.iterkeys():
+		fs = Player.equip_slots[slot] - Player.equipped[slot]
+		if fs:
+			EQ_Y += 16
+			if fs == 1: pl = ''
+			else: pl = 's'
+			display.draw_text('%d free slot%s (%s)' % (fs,pl,slot), (EQ_X, EQ_Y))
 
 	# Stats
 	display.draw_text('Attack damage: %d-%d' % (Player.min_atk, Player.max_atk), (420, 60))
-	display.draw_text('Attack time: %d' % Player.attack_time, (420, 76))
-	display.draw_text('Move time: %d' % Player.move_time, (420, 92))
+	display.draw_text('Attack speed: %d' % (10000/Player.attack_time), (420, 76))
+	display.draw_text('Move speed: %d' % (10000/Player.move_time), (420, 92))
 
 	display.update()
 
@@ -196,6 +188,12 @@ def text_input():
 			# standard event handler
 			handle_event_standard(event)
 
+def index_top_item(items):
+	for i in range(len(items)-1, -1, -1):
+		if items[i].holdable:
+			return i
+	return None
+
 def list_ground_items():
 	items = Player.cur_level.tiles[Player.x][Player.y].items
 	ilist = []
@@ -212,7 +210,7 @@ def prompt_item(items, verb='Apply', format=lambda x: '%d: %s' % (x[0], x[1].nam
 	ilist = []
 	for x in items:
 		ilist.append(format(x))
-	display.msg("%s which item? %s" % (verb, ', '.join(ilist)))
+	display.msg("%s which item? %s" % (verb, ', '.join(ilist)), color=(0,255,255))
 
 	response = text_input()
 	try:
@@ -228,50 +226,42 @@ def prompt_item(items, verb='Apply', format=lambda x: '%d: %s' % (x[0], x[1].nam
 
 def use_item():
 	items = enumerate(Player.inv)
-	i = prompt_item(items, 'Use')
+	i = prompt_item(items, 'In[v]oke')
 	# TODO: Move item usage effects to Item class (somehow)
 	if i is not None:
 		item = Player.inv[i]
-		if item.name == "town portal scroll":
-			display.msg("You start to channel the spell...")
-			Player.cur_level.advance_ticks(1000)
-			display.msg("Your surroundings suddenly change.")
-			Player.inv.pop(i)
-			Player.cur_level.creatures.remove(Player)
-			Player.cur_level = town
-			town.creatures.append(Player)
-			Player.x = 12
-			Player.y = 12
+		if item.action:
+			if item.action(Player):
+				Player.inv.pop(i)
 		else:
 			display.msg("There is no obvious use for this item.")
 
 def take_item():
 	items = Player.cur_level.tiles[Player.x][Player.y].items
-
-	for i in range(len(items)-1, -1, -1):
-		if items[i].holdable:
-			item = items[i]
-			if Player.cur_level.is_shop:
-				shop_ask = item.value
-				if Player.gold >= shop_ask:
-					display.msg('Buy the %s for %d gold? (y/N)' % (item.name, shop_ask))
-					response = text_input()
-					if response.lower().startswith('y'):
-						display.msg('You bought it!')
-						Player.gold -= shop_ask
-						Player.inv.append(item)
-						del items[i]
-					return
-				else:
-					# Cannot afford shop item
-					display.msg('You cannot afford the %s! It costs %d gold.' % (item.name, shop_ask))
-					return
-			else:
-				# not a shop; just take the item!
-				display.msg('You take the %s.' % item.name)
-				Player.inv.append(item)
-				del items[i]
+	i = index_top_item(items)
+	if i is not None:
+		item = items[i]
+		if Player.cur_level.is_shop:
+			shop_ask = item.value
+			if Player.gold >= shop_ask:
+				display.msg('Buy the %s for %d gold? (y/N)' % (item.name, shop_ask), color=(0,255,255))
+				response = text_input()
+				if response.lower().startswith('y'):
+					display.msg('You bought it!')
+					Player.gold -= shop_ask
+					Player.inv.append(item)
+					del items[i]
 				return
+			else:
+				# Cannot afford shop item
+				display.msg('You cannot afford the %s! It costs %d gold.' % (item.name, shop_ask))
+				return
+		else:
+			# not a shop; just take the item!
+			display.msg('You take the %s.' % item.name)
+			Player.inv.append(item)
+			del items[i]
+			return
 	else:
 		display.msg('There is nothing here to take.')
 		return
@@ -304,20 +294,6 @@ def cycle_items():
 def handle_event_standard(event):
 	if event.type == KEYDOWN:
 
-		if not Player.alive:
-			if event.key in keys_action:
-				Player.alive = True
-				Player.hp = Player.maxhp
-				Player.cur_level = town
-				town.creatures.append(Player)
-				Player.x = 12
-				Player.y = 12
-				display.msg("The light fades and you return to the world.")
-			else:
-				display.msg("You are dead. Press 'a' to revive.", color=(192,64,64))
-			redraw()
-			return
-
 		# Movement keys
 		new_x = Player.x
 		new_y = Player.y
@@ -335,7 +311,6 @@ def handle_event_standard(event):
 				occupant = Player.cur_level.occupant_at(new_x, new_y)
 				if occupant:
 					dmg = Player.attack(occupant)
-					display.msg('You slice the %s for %d damage!' % (occupant.name, dmg), color=(0,255,255))
 					if not occupant.alive:
 						display.msg('You have murdered it, earning 50 gold!', color=(255,255,0))
 						Player.gold += 50
@@ -351,124 +326,140 @@ def handle_event_standard(event):
 
 			# list items on floor
 			list_ground_items()
-			
-			# recalculate vision
-			# ... done in redraw() for now
-			# TODO: move vision somewhere more efficient
-			redraw()
-			return
 
 		# Use item in inventory
 		elif event.key == K_v:
 			use_item()
-			redraw()
-			return
 
 		# Take/buy item
-		elif event.key == K_COMMA:
+		elif event.key == K_g:
 			take_item()
-			redraw()
-			return
 
 		# Drop/sell item
 		elif event.key == K_d:
 			drop_item()
-			redraw()
-			return
 
 		# Cycle items on ground
 		elif event.key == K_c:
 			cycle_items()
-			redraw()
-			return
 
 		# Wait one step
 		elif event.key == K_PERIOD:
 			Player.cur_level.advance_ticks(100)
-			redraw()
 
 		# Rest until full hp
 		elif event.key == K_s:
-			display.msg("You begin to sleep...")
-			while Player.hp != Player.maxhp and Player.alive:
-				Player.cur_level.advance_ticks(10000)
-			display.msg("You stop sleeping.")
-			redraw()
+			display.msg("You sleep for 5000 ticks.")
+			Player.cur_level.advance_ticks(5000)
 
 		# Apply object on ground (aka enter a portal)
 		elif event.key in keys_action:
 			if (Player.x, Player.y) in Player.cur_level.portals:
 				portal = Player.cur_level.portals[(Player.x, Player.y)]
+				if portal.name == "the well of doom":
+					max_depth = max([i+1 for i,w in enumerate(well) if w.visited] + [0])
+					if max_depth > 1:
+						display.msg("Which level? (max: %d)" % max_depth)
+						response = text_input()
+						try:
+							lv = int(response)
+							if 2 <= lv <= max_depth:
+								# find the entry point in the upper level's portals
+								for p in well[lv-2].portals.values():
+									if p.name == "well level %d" % lv:
+										portal = p
+										break
+								else:
+									display.msg("critical error!")
+							elif lv == 1:
+								pass
+							else:
+								raise ValueError
 
-				Player.cur_level.creatures.remove(Player)
-				portal.dest_level.creatures.append(Player)
+						except ValueError:
+							display.msg("Invalid level.")
+							redraw()
+							return
+					# if max depth is <= 1, then just go to first level of well
 
-				Player.cur_level = portal.dest_level
-				Player.x = portal.dest_x
-				Player.y = portal.dest_y
-				Player.mp -= 1
+				Player.change_level_to(portal.dest_level, portal.dest_x, portal.dest_y)
 				display.msg('You enter %s.' % portal.name)
-				redraw()
-			return
 
 		# Equip/remove items
 		elif event.key == K_e:
-			if len(Player.equipment) >= 5:
-				display.msg("You have already equipped 5 items.")
-				redraw()
-				return
-
-			eq = [(i,item) for i,item in enumerate(Player.inv) if item.equippable]
-
-			if len(eq) == 0:
-				display.msg("You don't have any equipment to equip.")
-				redraw()
-				return
-
-			i = prompt_item(eq, "Equip")
-			if i is not None:
-				item = Player.inv.pop(i)
-				Player.equipment.append(item)
-				display.msg("You equip the %s." % item.name)
-				Player.recalc_stats()
-				redraw()
-			return
+			if len(Player.equipment) >= 10:
+				display.msg("You may only equip 10 items.")
+			else:
+				eq = [(i,item) for i,item in enumerate(Player.inv) if item.equippable]
+				if len(eq) == 0:
+					display.msg("You don't have any equipment to equip.")
+				else:
+					i = prompt_item(eq, "Equip")
+					if i is not None:
+						display.msg(Player.equip(i))
 
 		elif event.key == K_r:
 			if len(Player.equipment) == 0:
 				display.msg("You have nothing equipped.")
-				redraw()
-				return
+			else:
+				eq = enumerate(Player.equipment)
+				i = prompt_item(eq, "Remove")
+				if i is not None:
+					display.msg(Player.remove_equipment(i))
 
-			eq = enumerate(Player.equipment)
-			i = prompt_item(eq, "Remove")
-			if i is not None:
-				item = Player.equipment.pop(i)
-				Player.inv.append(item)
-				display.msg("You remove the %s." % item.name)
-				Player.recalc_stats()
-				redraw()
-			return
-
-		# Examine item
-		elif event.key == K_x:
+		# examine item in inventory
+		elif event.key == K_i:
 			items = enumerate(Player.inv)
-			i = prompt_item(items, "Examine")
-			if i is not None:
-				display.msg(Player.inv[i].describe())
-			redraw()
+			if items:
+				i = prompt_item(items, "Inspect")
+				if i is not None:
+					display.msg(Player.inv[i].describe())
+			else:
+				display.msg("You are not holding any items to inspect.")
+
+		# examine item on ground
+		elif event.key == K_x:
+			items = Player.cur_level.tiles[Player.x][Player.y].items
+			if items:
+				i = prompt_item(enumerate(items), "Examine")
+				if i is not None:
+					display.msg(items[i].describe())
+			else:
+				display.msg("Nothing here to examine.")
 
 		# Enter (to manually enter commands)
 		elif event.key == K_RETURN:
 			text = text_input()
 			display.msg('Just showing off that I can accept text input. You typed: %s' % text)
-			redraw()
-			return
 
-	elif event.type == QUIT:
+		redraw()
+		return
+	else:
+		handle_event_universe(event)
+
+def handle_event_dead(event):
+	if event.type == KEYDOWN:
+		if event.key in keys_action:
+			Player.alive = True
+			Player.hp = Player.maxhp
+			Player.cur_level = town
+			town.creatures.append(Player)
+			Player.x = 12
+			Player.y = 12
+			display.msg("The light fades and you return to the world.")
+		else:
+			display.msg("You are dead. Press 'a' to revive.", color=(192,64,64))
+	else:
+		handle_event_universe(event)
+	redraw()
+	return
+
+def handle_event_universe(event):
+	if event.type == QUIT:
 		pygame.quit()
 		sys.exit()
 		return
+
 
 # BAYLIFE YOLO
 if __name__ == '__main__':
@@ -477,3 +468,20 @@ if __name__ == '__main__':
 		# The good old infinite game loop.
 		event = pygame.event.wait()
 		handle_event_standard(event)
+		if Player.won:
+			Player.hp = -666
+			Player.alive = False
+			Player.cur_level.advance_ticks(0)
+			Player.cur_level.illuminated = False
+			display.msg("When it got exposed to daylight, the Triforce went berserk and killed everyone forever. Then it blew up the sun.", (255,0,255))
+			display.msg("Well done.", (255,0,0))
+			display.msg("The end. Thanks for playing!")
+			redraw()
+			while True:
+				event = pygame.event.wait()
+				handle_event_universe(event)
+		if not Player.alive:
+			display.msg("You have died.", (255,0,0))
+			while not Player.alive:
+				event = pygame.event.wait()
+				handle_event_dead(event)
