@@ -14,7 +14,7 @@ class Level:
 		self.is_shop = is_shop
 
 		# 2D list of tiles
-		self.tiles = [[Tile(spr.ROCK) for i in xrange(h)] for i in xrange(w)]
+		self.tiles = [[Tile(spr.ROCK) for i in range(h)] for i in range(w)]
 
 		# has the player visited us?
 		self.visited = False
@@ -40,7 +40,7 @@ class Level:
 				self.creatures.remove(c)
 
 	def all_tiles(self):
-		for t in (self.tiles[x][y] for x in xrange(self.width) for y in xrange(self.height)):
+		for t in (self.tiles[x][y] for x in range(self.width) for y in range(self.height)):
 			yield t
 	
 	def all_empty_tiles(self):

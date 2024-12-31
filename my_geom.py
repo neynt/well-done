@@ -8,7 +8,7 @@ def sign(x):
 
 # python please add this to standard library
 def range2d(w, h):
-	return ((x,y) for x in xrange(w) for y in xrange(h))
+	return ((x,y) for x in range(w) for y in range(h))
 
 # and this too
 def box2d(x, y, w, h):
@@ -16,16 +16,16 @@ def box2d(x, y, w, h):
 
 def square2d(x, y, w, h):
 	# top
-	for i in xrange(w):
+	for i in range(w):
 		yield (x+i, y)
 
 	# sides
-	for i in xrange(h-2):
+	for i in range(h-2):
 		yield (x, y+i+1)
 		yield (x+w-1, y+i+1)
 
 	# bot
-	for i in xrange(w):
+	for i in range(w):
 		yield (x+i, y+h-1)
 
 # seriously i'm using python to avoid this kind of

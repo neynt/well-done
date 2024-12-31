@@ -35,10 +35,10 @@ def init():
 	display.init_font('runescape_uf.ttf')
 	display.init_msg_log(780)
 	# enable key repeat
-	pygame.key.set_repeat(1, 200)
+	pygame.key.set_repeat(200, 200)
 
 	# Gold cheat:
-	#for i in xrange(10):
+	#for i in range(10):
 	#	town.tiles[3][3].items.append(Item(spr.GOLD_NUGGET, name="gold nugget", value=9001))
 	town.creatures.append(Player)
 
@@ -117,13 +117,13 @@ def redraw():
 	INV_W = 10
 	INV_H = 10
 	# inventory slot boxes
-	for i in xrange(INV_W*INV_H):
+	for i in range(INV_W*INV_H):
 		x,y = i%INV_W, i//INV_W
 		display.draw_rect((INV_X+x*21, INV_Y+y*21, 20, 20), (255,255,255))
 	# inventory axis labels (for EZ-dropping/selling)
-	for i in xrange(INV_W):
+	for i in range(INV_W):
 		display.draw_text('%d' % i, (INV_X+i*21+6, INV_Y-15))
-	for i in xrange(INV_H):
+	for i in range(INV_H):
 		display.draw_text('%d' % i, (INV_X-9, INV_Y+i*21+3))
 	# actual items
 	for i,item in enumerate(Player.inv):
@@ -147,7 +147,7 @@ def redraw():
 
 	EQ_Y += 16
 	# also write empty slots under garb
-	for slot in Player.equip_slots.iterkeys():
+	for slot in Player.equip_slots.keys():
 		fs = Player.equip_slots[slot] - Player.equipped[slot]
 		if fs:
 			EQ_Y += 16
@@ -292,6 +292,7 @@ def cycle_items():
 		list_ground_items()
 
 def handle_event_standard(event):
+	print(event)
 	if event.type == KEYDOWN:
 
 		# Movement keys

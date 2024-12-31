@@ -62,14 +62,14 @@ def init_sprites(filename='', sw=16, sh=16):
 		sprites = pygame.image.load(filename).convert_alpha()
 
 		sprites_grey = sprites.copy()
-		for x,y in ((x,y) for x in xrange(sprites.get_width()) for y in xrange(sprites.get_height())):
+		for x,y in ((x,y) for x in range(sprites.get_width()) for y in range(sprites.get_height())):
 			c = sprites_grey.get_at((x,y))
 			avg = (c.r + c.g + c.b) // 7
 			c.r = c.g = c.b = avg
 			sprites_grey.set_at((x,y), c)
 
 		sprites_blue = sprites.copy()
-		for x,y in ((x,y) for x in xrange(sprites.get_width()) for y in xrange(sprites.get_height())):
+		for x,y in ((x,y) for x in range(sprites.get_width()) for y in range(sprites.get_height())):
 			c = sprites_blue.get_at((x,y))
 			avg = (c.r + c.g + c.b) // 4
 			c.r = c.r // 2

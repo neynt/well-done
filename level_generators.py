@@ -36,15 +36,15 @@ def generate_shop(w, h, shop_items):
 def generate_dungeon(w, h, difficulty=1):
 	level = Level(w, h)
 
-	new_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
+	new_map = [[0 for _ in range(h)] for _ in range(w)]
 	# initialize new_map to noise (0.43% filled)
 	for x,y in range2d(w, h):
 		if random.random() < 0.43:
 			new_map[x][y] = 1
 
 	# apply cellular automation
-	for i in xrange(2):
-		temp_map = [[0 for _ in xrange(h)] for _ in xrange(w)]
+	for i in range(2):
+		temp_map = [[0 for _ in range(h)] for _ in range(w)]
 		for x,y in range2d(w, h):
 			wall_count = 0
 			for i,j in box2d(x-1, y-1, 3, 3):

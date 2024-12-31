@@ -14,7 +14,7 @@ import item_actions
 WELL_DEPTH = 20
 
 town = Level(25, 25, name="town")
-well = [generate_dungeon(13+min(12,i), 13+min(12,i), i+1) for i in xrange(100)]
+well = [generate_dungeon(13+min(12,i), 13+min(12,i), i+1) for i in range(100)]
 shop = []
 
 town.illuminated = True
@@ -86,7 +86,7 @@ for loc in random.sample(town.get_main_region(), 16):
 	new_shop.portals[(1,1)] = Portal(town, x, y, name="the town")
 
 # Add portals to dungeon
-for i in xrange(WELL_DEPTH):
+for i in range(WELL_DEPTH):
 	mr = well[i].get_main_region()
 
 	to_up, to_down = random.sample(mr, 2)

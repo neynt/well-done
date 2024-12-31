@@ -7,7 +7,7 @@ def generate_name():
 	name = ''
 	ns = 0
 	vs = 0
-	for i in xrange(random.randint(4, 9)):
+	for i in range(random.randint(4, 9)):
 		if ns >= 2:
 			name += random.choice(vowels)
 			ns = 0
